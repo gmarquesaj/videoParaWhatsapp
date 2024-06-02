@@ -11,10 +11,10 @@ videos=[]
 arqSaida="converter."
 if(sistema=='Windows'):
     arqSaida+="bat"
-    encoder="h264_amf"
 else:
     arqSaida+="sh"
-    encoder="h264_vaapi"
+
+criarPastas=0
 
 file = open(arqSaida, "w")
 sys.stdout = file
@@ -24,7 +24,8 @@ ffc=''
 if(sistema=='Windows'):
     ffc='C:\\Users\\gmarq\\Downloads\\ffmpeg-2024-04-15-git-5e380bcdb1-full_build\\ffmpeg-2024-04-15-git-5e380bcdb1-full_build\\bin\\'
     print("@echo off")
-
+else:
+    print("#!/bin/sh -x")
 # Caminho dos arquivos de entrada
 arqs=os.listdir("./converter/")
 
@@ -35,13 +36,15 @@ if(sistema=='Windows'):
 else:
     print("rm -f -R ./convertido/")
     print("mkdir ./convertido/")
+   # print("q=25")
 
 # Duracao maxima dos pedaços
 segs=25
-
+# inverter ou nao a sequencia de arquivos
+inverter=1
 # Para cada arquivo encontrado, cria uma pasta com o nome do arquivo, usa ffprobe para saber a duraçao do arquivo
 # e ffmpeg para criar copias de no maximo "segs" segundos, de todo o arquivo, convertendo se necessario para uso no whatsapp
-
+print("clear")
 for f in arqs:
     nome=f[:len(f)-4]
     videos.append(nome)
@@ -50,31 +53,53 @@ for f in arqs:
         print("arquivo invalido \"",f,"\"")
     else:
         result = os.popen(ffc+'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"'+f+"\"").read()
+        
         duracao = (float(result[:len(result)-1]))
         pedacos = max(1,math.floor(duracao/segs))
         soma = pedacos*segs
         dif = duracao - soma
-
+        print("# NOME::",nome," DUR::",duracao," PED::",pedacos," SOMA::",soma," DIF::",dif,"\n")
         if(dif>1):
             pedacos+=1
         for i in range(0,pedacos):
             ini= timedelta(seconds=i*segs)
-            fim= timedelta(seconds=i*segs+segs)
-            conversoes.append({"duracao":str(duracao),"pedacos":str(pedacos),"nome":nome,"pedaco":i+1,"soma":str(soma),"dif":str(dif),"inicio":str(ini),"fim":str(fim),"entrada":"\""+f+"\"","saida":"\"./convertido/"+nome+"/"+str(i+1).zfill(5) +".mp4\""})
+            fimi=i*segs+segs
+            fim= timedelta(seconds=fimi)
+            usargpu=1
+            if(math.floor(duracao)<=fimi):
+                fim= timedelta(seconds=(duracao))
+                usargpu=0
+            if(inverter==1):
+                va=pedacos-i
+            else:
+                va=i
+            saida="\"./convertido/"+nome+("/"if criarPastas==1 else "_")+str(va).zfill(5) +".mp4\"" 
+            conversoes.append({"usargpu":usargpu,"duracao":str(duracao),"pedacos":str(pedacos),"nome":nome,"pedaco":va,"soma":str(soma),"dif":str(dif),"inicio":str(ini),"fim":str(fim),"entrada":"\""+f+"\"","saida":saida})
 
-
-for v in videos:
-    if(sistema=='Windows'):
-       print("mkdir .\\convertido\\"+v)
-    else:
-       print("mkdir \"./convertido/"+v+"\"")
+if(criarPastas==1):
+    for v in videos:
+        if(sistema=='Windows'):
+            print("mkdir .\\convertido\\"+v)
+        else:
+            print("mkdir \"./convertido/"+v+"\"")
+reso="480"
+#prox=""
 for v in conversoes:
-    codigo=""
-    if(sistema=='Windows'):
-        codigo = ffc+"ffmpeg -ss "+v["inicio"]+" -to "+v["fim"]+" -i "+v["entrada"]+"  -c:a mp3 -c:v "+encoder+" -vf \"scale=-2:720\" -b:v 6000k "+v["saida"]+" -y"
-    else:
-        codigo = ffc+"ffmpeg -ss "+v["inicio"]+" -to "+v["fim"]+" -vaapi_device /dev/dri/renderD128 -i "+v["entrada"]+"  -c:a mp3 -c:v "+encoder+" -vf \"format=nv12,hwupload,scale_vaapi=-2:720\"  -f mp4  -qp 20 "+v["saida"]+" -y"
+    inicio=v["inicio"]
+    fim=v["fim"]
+    arqIn=v["entrada"]
+    arqOut=v["saida"]
+    usargpu=v["usargpu"]
+
+    encoder="h264_amf" if sistema=='Windows'else "h264_vaapi" if usargpu==1 else "h264"
+   # encoder="copy"
+    device="" if sistema=='Windows' else " -vaapi_device /dev/dri/renderD128 "  if usargpu==1 else " "
+    qualidade="-b:v 6000k" if sistema=='Windows' else "-qp 25" 
+    filtro="" if encoder=="copy" else " -vf \"scale=-2:"+reso+"\"" if sistema=='Windows' else " -vf \"format=nv12,hwupload,scale_vaapi=-2:"+reso+"\"" if usargpu==1 else " -vf \"format=nv12,scale=-2:"+reso+"\""
+
+    codigo = ffc+"ffmpeg -ss "+inicio+" -to "+fim+" "+device+" -i "+arqIn+"  -c:a mp3 -c:v "+encoder+" "+ filtro+" "+qualidade+" "+arqOut+" -y"
     print(codigo)
 
+ 
     
 
