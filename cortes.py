@@ -22,18 +22,19 @@ niveisDeLog=[ "quiet"  ,"panic"  ,"fatal"  ,"error"  ,"warning","info"   ,"verbo
 #---------------CONFIGURAÇÕES----------------------
 #--------------------------------------------------
 # resolucao
-reso:str="720"
+reso:str="480"
 # Criar ou nao uma pasta para cada video
 criarPastas:bool=1
 # Duracao maxima dos pedaços
-segs:int=59
+segs:int=29
 # inverter ou nao a sequencia de arquivos
-inverter:bool=0
+inverter:bool=1
 #usar copy como encoder
 copiar:bool=0
 #manter o nome original do video,se nao nomear o video com um numero ordenado
 manterNomeOri:bool=0
 nivelLog:int=4
+fps:int=24
 #--------------------------------------------------
 
 sistema:str=platform.system()
@@ -43,6 +44,7 @@ def gerarCodigo(v:conversao):
     device:str="" if sistema=='Windows' else " -vaapi_device /dev/dri/renderD128 "  if v.usarGpu==1 else " "
     qualidade:str="-b:v 6000k" if sistema=='Windows' else "-qp 20" 
     filtro:str="" if copiar== 1 else " -vf scale=-2:"+reso if sistema=='Windows' else " -vf format=nv12,hwupload,scale_vaapi=-2:"+reso if v.usarGpu==1 else " -vf format=nv12,scale=-2:"+reso
+    filtro+= ""if (copiar== 1 or fps==0 ) else ",fps="+str(fps)
     log:str= "" if nivelLog==-1 else "-loglevel "+niveisDeLog[nivelLog]
     codigo:str = ffc+"ffmpeg "+log+" -ss "+v.inicio+" -to "+v.fim+" "+device+" -i "+v.arqIn+"  -c:a mp3 -c:v "+encoder+" "+ filtro+" "+qualidade+" "+v.arqOut+" -y"
     return codigo
@@ -116,7 +118,8 @@ for f in arqs:
                 va=i
             pNum=str(va).zfill(5)
 
-            saida="\"./convertido/"+(nome if manterNomeOri==1 else "")+( "/" if criarPastas==1 else str(vNum).zfill(5)+"_" if manterNomeOri==0 else "_")+pNum+".mp4\"" 
+            saida="\"./convertido/" +(nome+"/"if(criarPastas==1) else "" )+(nome if(manterNomeOri==1) else str(vNum).zfill(5))+"_"+pNum+".mp4\""
+
             conv =conversao(usarGpu=usarGpu, duracao=str(duracao), pedacos=str(pedacos),nome=nome, pedaco=va, soma=str(soma),dif=str(dif), inicio=str(ini), fim=str(fim), arqIn="\""+f+"\"", arqOut=saida)
            # conversoes.append(conv)
             print(gerarCodigo(conv))
